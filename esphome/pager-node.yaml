@@ -41,6 +41,8 @@ esp32:
   board: esp32dev
   framework:
     type: arduino
+  extra_build_flags:
+    - "-D PAGER_DEVICE_NAME='\"${device_name}\"'"
 
 # -----------------------------------------------------------------------------
 #  Logging
@@ -161,7 +163,7 @@ display:
                 "%s", id(sent_message).state.c_str());
 
       // Notification banner
-      if (id(notify_active).state) {
+      if (id(notify_active).state == "true") {
         it.filled_rectangle(4, 52, 312, 40, Color(253, 160, 0));
         it.rectangle(4, 52, 312, 40, Color(255, 255, 255));
         it.printf(8, 56, id(font_small), Color(0, 0, 0),
