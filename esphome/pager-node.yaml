@@ -91,8 +91,85 @@ light:
     restore_mode: ALWAYS_ON
 
 # -----------------------------------------------------------------------------
-#  Display — confirmed working settings from power-display-esphome.yaml
-#  model: TFT 2.4, rotation: 180, invert_colors: false, color_palette: 8BIT
+#  Global variable to track active screen (0=INBOX, 1=COMPOSE, 2=PEERS)
+# -----------------------------------------------------------------------------
+globals:
+  - id: active_screen
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: compose_text
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: shift_on
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  # Message history — 5 slots, newest first
+  - id: msg_body_0
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_from_0
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_time_0
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: msg_body_1
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_from_1
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_time_1
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: msg_body_2
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_from_2
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_time_2
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: msg_body_3
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_from_3
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_time_3
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: msg_body_4
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_from_4
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: msg_time_4
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# -----------------------------------------------------------------------------
+#  Display — landscape 320x240 via rotation 90 from confirmed working base
 # -----------------------------------------------------------------------------
 display:
   - platform: ili9xxx
@@ -101,60 +178,189 @@ display:
     spi_id: tft_spi
     cs_pin: GPIO15
     dc_pin: GPIO2
-    rotation: 180
+    rotation: 90
     invert_colors: false
     color_palette: 8BIT
     update_interval: 500ms
     lambda: |-
-      auto C_BG     = Color(0,   0,   128);
-      auto C_PANEL  = Color(0,   0,   192);
-      auto C_CYAN   = Color(0,   255, 255);
-      auto C_WHITE  = Color(255, 255, 255);
-      auto C_GRAY   = Color(128, 128, 128);
-      auto C_ORANGE = Color(255, 128, 0);
-      auto C_BLACK  = Color(0,   0,   0);
+      auto C_BG       = Color(0,   0,   0);
+      auto C_PANEL    = Color(0,   0,   192);
+      auto C_ACTIVE   = Color(0,   255, 255);
+      auto C_CYAN     = Color(0,   255, 255);  // alias for C_ACTIVE
+      auto C_WHITE    = Color(255, 255, 255);
+      auto C_YELLOW   = Color(255, 255, 0);
+      auto C_ORANGE   = Color(255, 128, 0);
+      auto C_BLACK    = Color(0,   0,   0);
+      auto C_GREEN    = Color(0,   255, 0);
+      auto C_LTGRAY   = Color(192, 192, 192);
+      auto C_DKBLUE   = Color(0,   0,   128);
+
+      const int W = 320;
+      const int H = 240;
+      const int TAB_Y = 192;   // tab bar at bottom (y=192..220)
+      const int TAB_H = 28;
+      const int STA_Y = 0;     // status bar at top (y=0..18)
+      const int STA_H = 18;
+      const int CON_Y = 20;    // content starts just below status bar
 
       it.fill(C_BG);
 
-      // Status bar
-      it.filled_rectangle(0, 0, 240, 20, C_PANEL);
-      it.print(4, 4, id(font_small), C_CYAN, "${device_name}");
-      it.printf(90, 4, id(font_small), C_GRAY, "%d peer(s)", (int)id(peer_count).state);
+      // ── Status bar (top) ───────────────────────────────────────────────
+      it.filled_rectangle(0, STA_Y, W, STA_H, C_PANEL);
+      it.print(4, 4, id(font_small), C_YELLOW, "${device_name}");
+      it.printf(130, 4, id(font_small), C_WHITE, "%d peer(s)", (int)id(peer_count).state);
       if (id(unread_count).state > 0) {
-        it.printf(188, 4, id(font_small), C_ORANGE, "[%d]", (int)id(unread_count).state);
+        it.printf(272, 4, id(font_small), C_ORANGE, "[%d]", (int)id(unread_count).state);
       }
 
-      // Tab bar
-      it.filled_rectangle(0, 20, 240, 28, C_PANEL);
-      it.filled_rectangle(0, 20, 80, 28, C_CYAN);
-      it.print(10,  26, id(font_small), C_BLACK, "INBOX");
-      it.print(86,  26, id(font_small), C_GRAY,  "COMPOSE");
-      it.print(172, 26, id(font_small), C_GRAY,  "PEERS");
-      it.line(80,  20, 80,  48, C_BG);
-      it.line(160, 20, 160, 48, C_BG);
+      // ── Tab bar (bottom y=192..220) ────────────────────────────────────
+      int tab_w = W / 3;
+      it.filled_rectangle(0, TAB_Y, W, TAB_H, C_DKBLUE);
+      if (id(active_screen) == 0) it.filled_rectangle(0,         TAB_Y, tab_w, TAB_H, C_ACTIVE);
+      if (id(active_screen) == 1) it.filled_rectangle(tab_w,     TAB_Y, tab_w, TAB_H, C_ACTIVE);
+      if (id(active_screen) == 2) it.filled_rectangle(tab_w * 2, TAB_Y, tab_w, TAB_H, C_ACTIVE);
+      it.print(18,  TAB_Y + 9, id(font_small), id(active_screen)==0 ? C_BLACK : C_WHITE, "INBOX");
+      it.print(118, TAB_Y + 9, id(font_small), id(active_screen)==1 ? C_BLACK : C_WHITE, "COMPOSE");
+      it.print(232, TAB_Y + 9, id(font_small), id(active_screen)==2 ? C_BLACK : C_WHITE, "PEERS");
+      it.line(tab_w,     TAB_Y, tab_w,     TAB_Y + TAB_H, C_BG);
+      it.line(tab_w * 2, TAB_Y, tab_w * 2, TAB_Y + TAB_H, C_BG);
+      it.horizontal_line(0, TAB_Y, W, C_ACTIVE);
 
-      // FROM section
-      it.horizontal_line(0, 52, 240, C_GRAY);
-      it.print(4,  56, id(font_small), C_GRAY,  "FROM:");
-      it.printf(4, 70, id(font_small), C_CYAN,  "%s", id(last_sender).state.c_str());
-      it.printf(4, 84, id(font_small), C_WHITE, "%s", id(last_message).state.c_str());
+      // ── INBOX ──────────────────────────────────────────────────────────
+      if (id(active_screen) == 0) {
+        // Show up to 5 messages, newest at top
+        const std::string* bodies[5] = {
+          &id(msg_body_0), &id(msg_body_1), &id(msg_body_2),
+          &id(msg_body_3), &id(msg_body_4)
+        };
+        const std::string* froms[5] = {
+          &id(msg_from_0), &id(msg_from_1), &id(msg_from_2),
+          &id(msg_from_3), &id(msg_from_4)
+        };
+        int times[5] = {
+          id(msg_time_0), id(msg_time_1), id(msg_time_2),
+          id(msg_time_3), id(msg_time_4)
+        };
 
-      // SENT section
-      it.horizontal_line(0, 106, 240, C_GRAY);
-      it.print(4,   110, id(font_small), C_GRAY,  "SENT:");
-      it.printf(4,  124, id(font_small), C_WHITE, "%s", id(sent_message).state.c_str());
+        int shown = 0;
+        for (int i = 0; i < 5; i++) {
+          if (bodies[i]->empty()) continue;
+          int my = CON_Y + 4 + shown * 32;
+          if (my + 30 > TAB_Y) break;
+          it.filled_rectangle(2, my, W-4, 30, C_DKBLUE);
+          it.rectangle(2, my, W-4, 30, shown == 0 ? C_ACTIVE : C_PANEL);
+          // Header: sender + timestamp
+          char hdr[40];
+          int age = times[i] > 0 ? (int)(millis()/1000) - times[i] : 0;
+          if (age < 60)       snprintf(hdr, sizeof(hdr), "%s  %ds ago", froms[i]->c_str(), age);
+          else if (age < 3600) snprintf(hdr, sizeof(hdr), "%s  %dm ago", froms[i]->c_str(), age/60);
+          else                 snprintf(hdr, sizeof(hdr), "%s  %dh ago", froms[i]->c_str(), age/3600);
+          it.print(6, my + 3, id(font_small), shown == 0 ? C_YELLOW : C_LTGRAY, hdr);
+          it.printf(6, my + 16, id(font_small), C_WHITE, "%s", bodies[i]->c_str());
+          shown++;
+        }
+        if (shown == 0) {
+          it.print(6, CON_Y + 40, id(font_small), C_LTGRAY, "No messages yet");
+          it.print(6, CON_Y + 56, id(font_small), C_LTGRAY, "Go to COMPOSE to send one");
+        }
 
-      // Footer
-      it.horizontal_line(0, 300, 240, C_GRAY);
-      it.printf(4, 304, id(font_small), C_GRAY,
-                "ESP-NOW peers:%d", (int)id(peer_count).state);
+        // Last sent
+        if (!id(sent_message).state.empty()) {
+          it.filled_rectangle(2, TAB_Y - 36, W-4, 22, C_PANEL);
+          it.rectangle(2, TAB_Y - 36, W-4, 22, C_LTGRAY);
+          it.print(6,  TAB_Y - 33, id(font_small), C_YELLOW, "YOU:");
+          it.printf(34, TAB_Y - 33, id(font_small), C_WHITE,  "%s", id(sent_message).state.c_str());
+        }
+      }
 
-      // Notification banner
+      // ── COMPOSE ────────────────────────────────────────────────────────
+      if (id(active_screen) == 1) {
+        it.filled_rectangle(2, CON_Y + 2, W-4, 28, Color(0, 0, 64));
+        it.rectangle(2, CON_Y + 2, W-4, 28, C_CYAN);
+        it.print(6, CON_Y + 5, id(font_small), C_YELLOW, "MSG:");
+        it.printf(36, CON_Y + 5, id(font_small), C_WHITE, "%s", id(compose_text).c_str());
+        char ccount[12];
+        snprintf(ccount, sizeof(ccount), "%d/100", (int)id(compose_text).size());
+        it.print(W-46, CON_Y + 5, id(font_small), C_LTGRAY, ccount);
+        int cur_x = 36 + id(compose_text).size() * 6;
+        if (cur_x < W-52) it.print(cur_x, CON_Y + 16, id(font_small), C_CYAN, "_");
+
+        const int KX = 2;
+        const int KY = CON_Y + 34;
+        const int KW = 31;
+        const int KH = 30;
+        const int KG = 1;
+        bool sh = id(shift_on);
+        const char* r1 = sh ? "QWERTYUIOP" : "qwertyuiop";
+        const char* r2 = sh ? "ASDFGHJKL." : "asdfghjkl.";
+        const char* r3 = sh ? "ZXCVBNM,"   : "zxcvbnm,";
+
+        for (int i = 0; i < 10; i++) {
+          int kx = KX + i * (KW + KG);
+          it.filled_rectangle(kx, KY, KW, KH, C_DKBLUE);
+          it.rectangle(kx, KY, KW, KH, C_CYAN);
+          char lbl[2] = {r1[i], 0};
+          it.print(kx + 9, KY + 10, id(font_small), C_WHITE, lbl);
+
+          int ky2 = KY + KH + KG;
+          it.filled_rectangle(kx, ky2, KW, KH, C_DKBLUE);
+          it.rectangle(kx, ky2, KW, KH, C_CYAN);
+          char lbl2[2] = {r2[i], 0};
+          it.print(kx + 9, ky2 + 10, id(font_small), C_WHITE, lbl2);
+        }
+        // Row 3: Z-M + , (8 keys) + DEL
+        for (int i = 0; i < 8; i++) {
+          int kx = KX + i * (KW + KG);
+          int ky3 = KY + 2 * (KH + KG);
+          it.filled_rectangle(kx, ky3, KW, KH, C_DKBLUE);
+          it.rectangle(kx, ky3, KW, KH, C_CYAN);
+          char lbl3[2] = {r3[i], 0};
+          it.print(kx + 9, ky3 + 10, id(font_small), C_WHITE, lbl3);
+        }
+        int del_x = KX + 8 * (KW + KG);
+        int ky3 = KY + 2 * (KH + KG);
+        it.filled_rectangle(del_x, ky3, KW * 2 + KG, KH, Color(128, 0, 0));
+        it.rectangle(del_x, ky3, KW * 2 + KG, KH, Color(255, 0, 0));
+        it.print(del_x + 8, ky3 + 10, id(font_small), C_WHITE, "DEL");
+
+        // Row 4: SHF + SPACE + SEND
+        int ky4 = KY + 3 * (KH + KG);
+        // SHIFT key (leftmost, 2 keys wide)
+        it.filled_rectangle(KX, ky4, KW * 2 + KG, KH, sh ? C_ACTIVE : C_DKBLUE);
+        it.rectangle(KX, ky4, KW * 2 + KG, KH, sh ? C_YELLOW : C_CYAN);
+        it.print(KX + 8, ky4 + 10, id(font_small), sh ? C_BLACK : C_WHITE, "SHF");
+        // SPACE bar (5 keys wide)
+        int spc_x = KX + KW * 2 + KG * 2;
+        it.filled_rectangle(spc_x, ky4, KW * 5 + KG * 4, KH, C_DKBLUE);
+        it.rectangle(spc_x, ky4, KW * 5 + KG * 4, KH, C_CYAN);
+        it.print(spc_x + 50, ky4 + 10, id(font_small), C_WHITE, "SPC");
+        // SEND key (3 keys wide)
+        int snd_x = KX + KW * 7 + KG * 7;
+        it.filled_rectangle(snd_x, ky4, KW * 3 + KG * 2, KH, Color(0, 128, 0));
+        it.rectangle(snd_x, ky4, KW * 3 + KG * 2, KH, C_GREEN);
+        it.print(snd_x + 10, ky4 + 10, id(font_small), C_BLACK, "SEND");
+      }
+
+      // ── PEERS ──────────────────────────────────────────────────────────
+      if (id(active_screen) == 2) {
+        it.print(6, CON_Y + 4, id(font_small), C_YELLOW, "Known peers:");
+        it.horizontal_line(0, CON_Y + 16, W, C_DKBLUE);
+        bool has_peers = (int)id(peer_count).state > 0;
+        it.filled_rectangle(2, CON_Y + 20, W-4, 20, has_peers ? C_DKBLUE : C_BG);
+        it.printf(6,   CON_Y + 23, id(font_small), has_peers ? C_GREEN : C_LTGRAY,
+                  has_peers ? "ONLINE" : "No peers seen");
+        it.printf(100, CON_Y + 23, id(font_small), C_WHITE, "%d active", (int)id(peer_count).state);
+        it.horizontal_line(0, CON_Y + 44, W, C_DKBLUE);
+        it.print(6,  CON_Y + 48, id(font_small), C_YELLOW, "Last heard from:");
+        it.printf(6, CON_Y + 62, id(font_small), C_ACTIVE, "%s", id(last_sender).state.c_str());
+      }
+
+      // ── Notification banner ────────────────────────────────────────────
       if (id(notify_active).state == "true") {
-        it.filled_rectangle(4, 50, 232, 40, C_ORANGE);
-        it.rectangle(4, 50, 232, 40, C_WHITE);
-        it.printf(8, 54, id(font_small), C_BLACK, "MSG: %s", id(last_sender).state.c_str());
-        it.printf(8, 68, id(font_small), C_BLACK, "%s", id(last_message).state.c_str());
+        it.filled_rectangle(4, CON_Y + 2, W-8, 40, C_ORANGE);
+        it.rectangle(4, CON_Y + 2, W-8, 40, C_WHITE);
+        it.printf(8, CON_Y + 6,  id(font_small), C_BLACK, "MSG FROM: %s", id(last_sender).state.c_str());
+        it.printf(8, CON_Y + 20, id(font_small), C_BLACK, "%s", id(last_message).state.c_str());
       }
 
 # -----------------------------------------------------------------------------
@@ -187,14 +393,79 @@ touchscreen:
       y_min: 300
       y_max: 3700
     transform:
-      swap_xy: false
+      swap_xy: true
       mirror_x: false
       mirror_y: false
     on_touch:
       then:
-        - logger.log:
-            format: "Touch x=%d y=%d"
-            args: ["touch.x", "touch.y"]
+        - lambda: |-
+            int x = touch.x;
+            int y = touch.y;
+            ESP_LOGD("touch", "x=%d y=%d screen=%d", x, y, id(active_screen));
+
+            // ── Tab bar (y=192..220, bottom of screen) ───────────────────
+            if (y >= 190 && y <= 225) {
+              if (x < 107)       id(active_screen) = 0;
+              else if (x < 214)  id(active_screen) = 1;
+              else               id(active_screen) = 2;
+              // Auto-clear unread when switching to INBOX
+              if (id(active_screen) == 0) espnow_unread_count = 0;
+              id(tft).update();
+              return;
+            }
+
+            // ── Keyboard (compose screen only) ────────────────────────────
+            if (id(active_screen) != 1) return;
+
+            const int KX = 2;
+            const int KY = 54;   // CON_Y(20) + 34
+            const int KW = 31;
+            const int KH = 30;
+            const int KG = 1;
+
+            if (y < KY || y > KY + 4 * (KH + KG)) return;
+
+            int row = (y - KY) / (KH + KG);
+            int col = (x - KX) / (KW + KG);
+            if (col < 0 || col > 9) return;
+
+            bool sh = id(shift_on);
+            const char* rows_up[3] = {"QWERTYUIOP", "ASDFGHJKL.", "ZXCVBNM,"};
+            const char* rows_lo[3] = {"qwertyuiop", "asdfghjkl.", "zxcvbnm,"};
+            const char** rows = sh ? rows_up : rows_lo;
+            std::string& txt = id(compose_text);
+
+            if (row == 0 && col < 10) {
+              if (txt.size() < 100) { txt += rows[0][col]; id(shift_on) = false; }
+            } else if (row == 1 && col < 10) {
+              if (txt.size() < 100) { txt += rows[1][col]; id(shift_on) = false; }
+            } else if (row == 2) {
+              if (col < 8) {
+                if (txt.size() < 100) { txt += rows[2][col]; id(shift_on) = false; }
+              } else {
+                if (!txt.empty()) txt.pop_back();
+              }
+            } else if (row == 3) {
+              int snd_x = KX + KW * 7 + KG * 7;
+              int spc_x = KX + KW * 2 + KG * 2;
+              if (x >= snd_x) {
+                // SEND
+                if (!txt.empty()) {
+                  espnow_send_message(txt.c_str());
+                  ESP_LOGI("compose", "Sent: %s", txt.c_str());
+                  txt = "";
+                  id(shift_on) = false;
+                  id(active_screen) = 0;
+                }
+              } else if (x >= spc_x) {
+                // SPACE
+                if (txt.size() < 100) txt += ' ';
+              } else {
+                // SHIFT toggle
+                id(shift_on) = !id(shift_on);
+              }
+            }
+            id(tft).update();
 
 # -----------------------------------------------------------------------------
 #  Sensors
@@ -291,3 +562,19 @@ interval:
     then:
       - lambda: |-
           espnow_bridge_loop();
+          // Sync message history from bridge into globals
+          id(msg_body_0) = espnow_msg_body[0];
+          id(msg_from_0) = espnow_msg_from[0];
+          id(msg_time_0) = espnow_msg_time[0];
+          id(msg_body_1) = espnow_msg_body[1];
+          id(msg_from_1) = espnow_msg_from[1];
+          id(msg_time_1) = espnow_msg_time[1];
+          id(msg_body_2) = espnow_msg_body[2];
+          id(msg_from_2) = espnow_msg_from[2];
+          id(msg_time_2) = espnow_msg_time[2];
+          id(msg_body_3) = espnow_msg_body[3];
+          id(msg_from_3) = espnow_msg_from[3];
+          id(msg_time_3) = espnow_msg_time[3];
+          id(msg_body_4) = espnow_msg_body[4];
+          id(msg_from_4) = espnow_msg_from[4];
+          id(msg_time_4) = espnow_msg_time[4];
