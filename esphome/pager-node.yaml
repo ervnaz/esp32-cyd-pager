@@ -133,7 +133,7 @@ display:
     update_interval: 500ms
     auto_clear_enabled: false
     color_order: BGR
-    buffer_size: 25%          # use 1/4 buffer — fits in ESP32 DRAM (~37KB)
+    color_palette: 8BIT    # required on ESP32 without PSRAM — 16bit needs ~150KB, 8bit needs ~75KB
     lambda: |-
       // Background
       it.fill(Color(8, 8, 66));
