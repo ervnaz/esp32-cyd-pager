@@ -1,170 +1,298 @@
 # ESP32 CYD Pager
 
-Standalone mesh pager using **ESP-NOW** on the **ESP32-2432S028R** ("Cheap Yellow Display").  
-No WiFi router, no internet — devices talk directly to each other.
+A standalone off-grid mesh pager using **ESP-NOW** on the **ESP32-2432S028R** ("Cheap Yellow Display"). Devices communicate directly with each other — no WiFi router, no internet, no cloud.
+
+Two flavours are provided:
+- **Arduino sketch** (`esp32_pager.ino`) — full touchscreen UI with on-screen keyboard, runs standalone with no Home Assistant dependency
+- **ESPHome** (`pager-node.yaml`) — integrates with Home Assistant, supports OTA updates and HA automations
 
 ---
 
 ## Hardware
 
-| Board | ESP32-2432S028R (CYD) |
+| | |
 |---|---|
+| Board | ESP32-2432S028R (CYD — Cheap Yellow Display) |
 | Display | 2.8" ILI9341 TFT 320×240 |
-| Touch | XPT2046 resistive (default) |
+| Touch | XPT2046 resistive |
 | Radio | ESP-NOW over 2.4 GHz WiFi radio |
-| Range | ~100 m open air (ESP-NOW typical) |
+| Range | ~100 m open air |
+
+> **Important:** This board has two hardware variants with different SPI pin mappings. Check which variant you have before flashing — see Wiring Reference below.
 
 ---
 
-## Required Libraries (Arduino IDE / PlatformIO)
+## Features
+
+- **Mesh messaging** — broadcast messages to all peers in range simultaneously
+- **Auto peer discovery** — devices find each other automatically via heartbeat beacons, no manual MAC entry
+- **On-screen keyboard** — uppercase/lowercase with SHIFT toggle, DEL, SPACE, SEND
+- **Message history** — last 5 received messages shown in INBOX with relative timestamps
+- **Notification banner** — orange overlay appears for 3 seconds on incoming message
+- **Unread badge** — `[N]` counter in status bar, auto-clears when INBOX is opened
+- **Three screens** — INBOX, COMPOSE, PEERS, switchable via bottom tab bar
+- **Home Assistant integration** (ESPHome version) — send messages via HA service, trigger automations on receive
+- **OTA updates** (ESPHome version) — update firmware over WiFi
+
+---
+
+## File Structure
+
+```
+esp32-cyd-pager/
+│
+├── Arduino sketch
+│   ├── esp32_pager.ino      ← Main sketch (open in Arduino IDE)
+│   ├── config.h             ← Pins, timing, colours — edit per unit
+│   ├── message_types.h      ← ESP-NOW wire format structs
+│   ├── message_store.h      ← Inbox ring-buffer (30 messages)
+│   ├── espnow_manager.h     ← ESP-NOW send/receive/peer management
+│   ├── ui.h                 ← UI public API
+│   ├── ui.cpp               ← All screen drawing & touch handling
+│   └── User_Setup.h         ← TFT_eSPI config → copy to library folder
+│
+├── ESPHome
+│   ├── pager-node.yaml      ← ESPHome config (one per unit)
+│   ├── espnow_bridge.h      ← Custom ESP-NOW C++ bridge for ESPHome
+│   └── secrets.yaml         ← WiFi / API / OTA credentials (not committed)
+│
+├── CI
+│   ├── platformio.ini       ← PlatformIO build config
+│   └── .github/workflows/
+│       └── build.yml        ← GitHub Actions CI
+│
+└── README.md
+```
+
+---
+
+## Wiring Reference
+
+The CYD has all components soldered on-board — no external wiring needed. However there are two known variants with different display SPI pins:
+
+### Variant A — Standard CYD (most common)
+| Function | GPIO |
+|---|---|
+| TFT CLK | 18 |
+| TFT MOSI | 23 |
+| TFT MISO | 19 |
+| TFT CS | 15 |
+| TFT DC | 2 |
+| TFT BL | 21 |
+| Touch CLK | 25 |
+| Touch MOSI | 32 |
+| Touch MISO | 39 |
+| Touch CS | 33 |
+| Touch IRQ | 36 |
+
+### Variant B — Alternative pinout (some units)
+| Function | GPIO |
+|---|---|
+| TFT CLK | **14** |
+| TFT MOSI | **13** |
+| TFT MISO | **12** |
+| TFT CS | 15 |
+| TFT DC | 2 |
+| TFT BL | 21 |
+| Touch CLK | 25 |
+| Touch MOSI | 32 |
+| Touch MISO | 39 |
+| Touch CS | 33 |
+| Touch IRQ | 36 |
+
+> If the screen stays white after flashing, try switching between Variant A and B pin mappings.
+
+---
+
+## Quickstart — Arduino
+
+### 1. Install libraries
 
 | Library | Install via |
 |---|---|
-| **TFT_eSPI** by Bodmer | Library Manager |
-| **XPT2046_Touchscreen** by Paul Stoffregen | Library Manager |
-| **esp_now** | Built into ESP32 Arduino core |
-| **WiFi** | Built into ESP32 Arduino core |
+| TFT_eSPI by Bodmer | Arduino Library Manager |
+| XPT2046_Touchscreen by Paul Stoffregen | Arduino Library Manager |
+| esp_now | Built into ESP32 Arduino core |
+| WiFi | Built into ESP32 Arduino core |
 
-> **For CST816S capacitive touch** (alternative boards):  
-> Install **CST816S** by koendv — uncomment Option B lines in `.ino` and comment Option A.
+### 2. Configure TFT_eSPI
 
----
-
-## TFT_eSPI Setup (IMPORTANT)
-
-Copy `User_Setup.h` from this project into your TFT_eSPI library folder,
-replacing the existing one:
+Copy `User_Setup.h` into your TFT_eSPI library folder, replacing the existing file:
 
 ```
 Arduino/libraries/TFT_eSPI/User_Setup.h
 ```
 
-Or use `User_Setup_Select.h` to point to a custom path.
+### 3. Set device name
 
----
-
-## Wiring Reference (CYD built-in — no external wiring needed)
-
-The CYD has everything soldered on-board:
-
-| Function | GPIO |
-|---|---|
-| TFT MOSI | 23 |
-| TFT MISO | 19 |
-| TFT CLK  | 18 |
-| TFT CS   | 15 |
-| TFT DC   | 2  |
-| TFT BL   | 21 |
-| Touch CLK| 25 |
-| Touch MOSI| 32 |
-| Touch MISO| 39 |
-| Touch CS | 33 |
-| Touch IRQ| 36 |
-
----
-
-## Per-Device Configuration
-
-Before flashing each unit, edit **`config.h`**:
+Edit `config.h` before flashing each unit — every device needs a unique name:
 
 ```cpp
-#define DEVICE_NAME   "UNIT-1"   // unique name, max 8 chars
+#define DEVICE_NAME   "UNIT-1"   // max 8 chars
 ```
 
-Each device auto-discovers peers when they come online — no manual MAC entry needed.
+### 4. Flash
+
+Open `esp32_pager.ino` in Arduino IDE, select **ESP32 Dev Module**, and upload.
+
+### 5. Or use PlatformIO
+
+```bash
+# Compile and flash (resistive touch)
+pio run -e cyd --target upload
+
+# Capacitive touch variant
+pio run -e cyd_cap --target upload
+```
 
 ---
 
-## Touch Calibration
+## Quickstart — ESPHome
 
-The constants in `config.h` are approximate:
+### 1. Copy files
 
-```cpp
-#define TOUCH_X_MIN    200
-#define TOUCH_X_MAX   3800
-#define TOUCH_Y_MIN    300
-#define TOUCH_Y_MAX   3700
-```
-
-To calibrate for your specific board, run the **TFT_eSPI Touch_calibrate** example sketch
-and paste the output values here.  If the axes are swapped set `TOUCH_SWAP_XY true`.
-
----
-
-## ESP-NOW Channel
-
-All devices **must use the same WiFi channel**.  Default is channel **1** (`ESPNOW_CHANNEL` in config.h).  
-If you run into interference, change all units to channel 6 or 11.
-
----
-
-## Project File Structure
+Place these files in your ESPHome config directory (e.g. `/config/esphome/`):
 
 ```
-esp32_pager/
-├── esp32_pager.ino      ← Main sketch (open this in Arduino IDE)
-├── config.h             ← All pins, timing, colours — edit per unit
-├── message_types.h      ← Shared data structures (wire format)
-├── message_store.h      ← Inbox ring-buffer
-├── espnow_manager.h     ← ESP-NOW send/receive/peer management
-├── ui.h                 ← UI public API
-├── ui.cpp               ← All screen drawing & touch handling
-└── User_Setup.h         ← TFT_eSPI config → copy to library folder
+pager-node.yaml
+espnow_bridge.h
+secrets.yaml       ← fill in your credentials
+```
+
+> **Important:** Upload `espnow_bridge.h` using the **File Editor addon** or SSH — do not paste it through the ESPHome web editor as the `#` characters in preprocessor directives may be stripped.
+
+### 2. Create secrets.yaml
+
+```yaml
+wifi_ssid: "YourWiFiSSID"
+wifi_password: "YourWiFiPassword"
+ap_password: "pager1234"
+ota_password: "your-ota-password"
+api_encryption_key: "your-base64-32-byte-key"  # openssl rand -base64 32
+```
+
+### 3. Set device name
+
+In `pager-node.yaml`, change the substitution at the top for each unit:
+
+```yaml
+substitutions:
+  device_name: "unit-1"      # ← unique per unit
+  device_friendly: "Pager Unit 1"
+```
+
+### 4. Flash
+
+```bash
+# First flash via USB
+esphome run pager-node.yaml
+
+# Subsequent updates via OTA
+esphome run pager-node.yaml
+```
+
+### 5. Send messages from Home Assistant
+
+Once connected to HA, use the Developer Tools service call:
+
+```yaml
+service: esphome.cyd_pager_unit_1_send_message
+data:
+  message: "Hello from HA!"
 ```
 
 ---
 
 ## UI Overview
 
-### Screens (tap the tab bar to switch)
+### Status bar (always visible)
+| Position | Content |
+|---|---|
+| Left | Device name |
+| Centre | Active peer count |
+| Right | Unread message count `[N]` (orange) |
 
+### Tab bar (bottom, tap to switch)
 | Tab | Description |
 |---|---|
-| **INBOX** | Message bubbles, newest first. Tap top/bottom 25% to scroll. |
-| **COMPOSE** | On-screen keyboard. Tap **SND** key (green) to broadcast. |
-| **PEERS** | Live peer list with last-seen time and online status dot. |
+| INBOX | Last 5 received messages with sender and relative timestamp. Tapping clears unread count. |
+| COMPOSE | On-screen keyboard. Type a message and tap SEND to broadcast to all peers. |
+| PEERS | Active peer count and last heard sender. |
 
-### Status Bar (always visible)
-- **Left**: This device's name
-- **Centre**: Active peer count
-- **Right**: Unread message count (orange `[N]`)
+### Keyboard
+| Key | Action |
+|---|---|
+| Letter keys | Type character (lowercase by default) |
+| SHF | Toggle shift — highlighted yellow when active, auto-releases after one character |
+| SPC | Space |
+| DEL | Backspace |
+| SEND | Broadcast message to all peers, return to INBOX |
 
-### Notification Banner
-Incoming messages trigger an orange overlay banner for 3 seconds showing sender and preview.
-
-### Keyboard Features
-- `SFT` — toggle shift (auto-releases after one character)
-- `NUM` — toggle number/symbol layer
-- `<<` — backspace
-- `SND` — broadcast message to all peers
+### Notification banner
+Incoming messages trigger an orange overlay banner for 3 seconds showing the sender and message preview.
 
 ---
 
-## Serial Debug Output
+## ESP-NOW Channel
 
-Open Serial Monitor at **115200 baud** to see:
-- This device's MAC address (copy this to add as a named peer on other units)
-- Incoming packet log
-- Peer discovery events
-- Send results
+All devices **must use the same WiFi channel**.
 
----
+- **Arduino version:** Set `ESPNOW_CHANNEL` in `config.h` (default: 1). All units must match.
+- **ESPHome version:** Channel is set automatically to match the connected WiFi router channel. All ESPHome units connecting to the same router will automatically use the same channel.
 
-## Limitations & Known Issues
-
-- **No encryption** — ESP-NOW packets are unencrypted by default.  
-  For private messages, add `peer.encrypt = true` and set an LMK.
-- **No persistent storage** — messages are lost on reboot (no SPIFFS/NVS yet).
-- **250-byte ESP-NOW limit** — message bodies capped at 200 chars.
-- **Broadcast ACKs** — the current implementation sends ACKs for all received messages;  
-  for true delivery confirmation you'd need directed (unicast) sends.
+> If mixing Arduino and ESPHome units in the same mesh, ensure the Arduino units are configured to use the same channel as your WiFi router.
 
 ---
 
-## Potential Enhancements
+## Touch Calibration
 
-- [ ] NVS/SPIFFS message persistence across reboots
-- [ ] Encrypted unicast to a selected peer (from Peers screen)
+The default calibration values in `config.h` / `pager-node.yaml` are approximate:
+
+```
+X_MIN: 200   X_MAX: 3800
+Y_MIN: 300   Y_MAX: 3700
+```
+
+To calibrate for your specific board, run the **TFT_eSPI Touch_calibrate** example sketch and paste the output values into your config.
+
+---
+
+## Known Limitations
+
+| Limitation | Detail |
+|---|---|
+| No encryption | ESP-NOW packets are unencrypted by default. Add `peer.encrypt = true` and set an LMK for private comms. |
+| No persistence | Messages are lost on reboot (NVS storage planned). |
+| 200 char limit | ESP-NOW packets are capped at 250 bytes; message bodies capped at 200 chars. |
+| Broadcast only | All messages go to all peers. Direct unicast to a specific peer is planned. |
+| No RTC | Timestamps are relative to uptime, not wall-clock time. Add an RTC module for real timestamps. |
+
+---
+
+## Planned Enhancements
+
+- [ ] Peer list in PEERS tab with individual online/offline status
+- [ ] Numbers and symbols keyboard layer
+- [ ] ACK confirmation tick on sent messages
+- [ ] Buzzer notification on GPIO 26
+- [ ] NVS message persistence across reboots
+- [ ] Direct (unicast) messaging to selected peer
+- [ ] Home Assistant automation triggers on message received
 - [ ] Longer messages via multi-packet fragmentation
-- [ ] RTC module for real timestamps
-- [ ] Sound/haptic notification on the CYD buzzer (GPIO 26)
+
+---
+
+## Contributing
+
+Pull requests welcome. Please test on hardware before submitting — the CI pipeline only verifies compilation.
+
+```bash
+# Run CI compile check locally
+pio run -e ci
+```
+
+---
+
+## License
+
+MIT
