@@ -3,6 +3,7 @@
 // =============================================================================
 #pragma once
 #include <esp_now.h>
+#include <esp_wifi.h>      // ← required for esp_wifi_get_mac()
 #include <WiFi.h>
 #include "message_types.h"
 #include "config.h"
@@ -100,8 +101,6 @@ namespace ESPNowManager {
     }
 
     if (pkt->type == PKT_ACK) {
-      // MessageStore::markAck(pkt->msg_id) called from UI/main context
-      // Post event via a flag instead to avoid cross-task issues
       Serial.printf("[ESPNOW] ACK for msg %u\n", pkt->msg_id);
     }
   }

@@ -34,19 +34,20 @@ static int      _inbox_scroll = 0;   // message index of top visible
 
 // ── Keyboard layout ──────────────────────────────────────────────────────────
 // 4 rows, up to 10 keys each  (space = '_', backspace = '<', send = '!')
-static const char KB_LOWER[KB_ROWS][KB_COLS+1] = {
+// Array width = KB_COLS+2 to hold 10 chars + null terminator safely
+static const char KB_LOWER[KB_ROWS][KB_COLS+2] = {
   "qwertyuiop",
   "asdfghjkl.",
   "zxcvbnm,!<",  // ! = SEND,  < = BACKSPACE
   " _?123:;-' "  // space mapped to first char
 };
-static const char KB_UPPER[KB_ROWS][KB_COLS+1] = {
+static const char KB_UPPER[KB_ROWS][KB_COLS+2] = {
   "QWERTYUIOP",
   "ASDFGHJKL.",
   "ZXCVBNM,!<",
   " _?123:;-' "
 };
-static const char KB_NUM[KB_ROWS][KB_COLS+1] = {
+static const char KB_NUM[KB_ROWS][KB_COLS+2] = {
   "1234567890",
   "!@#$%^&*()",
   "-_=+[]{}|<",
@@ -234,7 +235,7 @@ static void drawCompose() {
   _tft->print("_");
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
-  const char (*kb)[KB_COLS+1] = _num_mode ? KB_NUM : (_shift ? KB_UPPER : KB_LOWER);
+  const char (*kb)[KB_COLS+2] = _num_mode ? KB_NUM : (_shift ? KB_UPPER : KB_LOWER);
   int key_w = SCREEN_W / KB_COLS;   // 32 px each
 
   for (int row = 0; row < KB_ROWS; row++) {
@@ -257,10 +258,10 @@ static void drawCompose() {
       drawRect(kx, ky, kw, kh, COL_BG);
 
       // Label
-      char lbl[3] = {c, 0};
+      char lbl[4] = {c, 0, 0, 0};
       if (c == '<') { lbl[0]='<'; lbl[1]='<'; lbl[2]=0; }
-      if (c == '!' && row==2) { lbl[0]='S'; lbl[1]='N'; lbl[2]='D'; } // SNDkey
-      if (row==3 && col==0) { lbl[0]='S'; lbl[1]='P'; lbl[2]='C'; }
+      if (c == '!' && row==2) { lbl[0]='S'; lbl[1]='N'; lbl[2]='D'; lbl[3]=0; }
+      if (row==3 && col==0)   { lbl[0]='S'; lbl[1]='P'; lbl[2]='C'; lbl[3]=0; }
 
       _tft->setTextColor(fg, bg);
       _tft->setTextSize(1);
@@ -283,8 +284,8 @@ static void drawCompose() {
 
 // ── Shift/Num toggle buttons (below keyboard) ─────────────────────────────────
 static void drawComposeControls() {
-  int cy = KB_START_Y + KB_ROWS * KB_KEY_H + 1;
-  // Already drawn in drawCompose, but kept separate for redraw
+  // Already drawn in drawCompose, kept for explicit redraw calls
+  (void)0;
 }
 
 // ── PEERS screen ──────────────────────────────────────────────────────────────
@@ -399,7 +400,7 @@ static void handleComposeTouch(int16_t x, int16_t y) {
   int row = (y - KB_START_Y) / KB_KEY_H;
   if (row < 0 || row >= KB_ROWS || col < 0 || col >= KB_COLS) return;
 
-  const char (*kb)[KB_COLS+1] = _num_mode ? KB_NUM : (_shift ? KB_UPPER : KB_LOWER);
+  const char (*kb)[KB_COLS+2] = _num_mode ? KB_NUM : (_shift ? KB_UPPER : KB_LOWER);
   char c = kb[row][col];
 
   if (c == '<') {
