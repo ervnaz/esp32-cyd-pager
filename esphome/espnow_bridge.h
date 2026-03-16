@@ -25,7 +25,23 @@
 
 static const uint8_t BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
-// ── Shared state (read by YAML lambdas) ──────────────────────────────────────
+// ── Message history (5 slots, newest first) ──────────────────────────────────
+#define MSG_HISTORY 5
+std::string espnow_msg_body[MSG_HISTORY];
+std::string espnow_msg_from[MSG_HISTORY];
+int         espnow_msg_time[MSG_HISTORY] = {0};
+
+void espnow_push_message(const std::string& from, const std::string& body) {
+  // Shift older messages down
+  for (int i = MSG_HISTORY - 1; i > 0; i--) {
+    espnow_msg_body[i] = espnow_msg_body[i-1];
+    espnow_msg_from[i] = espnow_msg_from[i-1];
+    espnow_msg_time[i] = espnow_msg_time[i-1];
+  }
+  espnow_msg_body[0] = body;
+  espnow_msg_from[0] = from;
+  espnow_msg_time[0] = (int)(millis() / 1000);
+}
 int         espnow_peer_count     = 0;
 int         espnow_unread_count   = 0;
 std::string espnow_last_body      = "";
@@ -123,6 +139,7 @@ static void _onRecv(const esp_now_recv_info_t* recv_info,
     espnow_unread_count++;
     espnow_notify_visible  = true;
     espnow_notify_start_ms = millis();
+    espnow_push_message(std::string(pkt->sender_name), std::string(pkt->body));
 
     // Send ACK
     EspNowPacket ack{};
@@ -186,7 +203,7 @@ void espnow_bridge_init() {
   if (!esp_now_is_peer_exist(BROADCAST_MAC)) esp_now_add_peer(&peer);
 
   ESP_LOGI("espnow", "ESP-NOW bridge ready — device: %s, channel: %d",
-           PAGER_DEVICE_NAME, ESPNOW_CHANNEL);
+           PAGER_DEVICE_NAME, primary);
 }
 
 // ── Loop — call every second from interval: lambda ───────────────────────────
