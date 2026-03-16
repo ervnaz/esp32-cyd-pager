@@ -1,11 +1,15 @@
 # =============================================================================
-#  secrets.yaml  —  ESPHome secrets file
-#  Place this in the same directory as your pager-node.yaml files.
-#  DO NOT commit this file to git — add it to .gitignore
+#  secrets.yaml  —  ESPHome secrets
+#  Place alongside your pager-node.yaml files.
+#  DO NOT commit this file to git — add secrets.yaml to .gitignore
 # =============================================================================
 
 wifi_ssid: "YourWiFiSSID"
 wifi_password: "YourWiFiPassword"
+
 ap_password: "pager1234"          # fallback hotspot password
-ota_password: "ota-password-here"
-api_password: "api-password-here"
+
+ota_password: "your-ota-password-here"
+
+# Generate with: openssl rand -base64 32
+api_encryption_key: "your-base64-32-byte-key-here"
