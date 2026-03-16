@@ -72,7 +72,8 @@ ota:
 #  Home Assistant API + send_message service
 # -----------------------------------------------------------------------------
 api:
-  password: !secret api_password
+  encryption:
+    key: !secret api_encryption_key
   services:
     - service: send_message
       variables:
