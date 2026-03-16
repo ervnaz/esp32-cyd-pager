@@ -131,8 +131,9 @@ display:
     rotation: 90
     invert_colors: false
     update_interval: 500ms
-    auto_clear_enabled: false   # saves RAM — we fill background manually in lambda
+    auto_clear_enabled: false
     color_order: BGR
+    buffer_size: 25%          # use 1/4 buffer — fits in ESP32 DRAM (~37KB)
     lambda: |-
       // Background
       it.fill(Color(8, 8, 66));
@@ -179,12 +180,14 @@ display:
 #  Fonts
 # -----------------------------------------------------------------------------
 font:
-  - file: "gfonts://Roboto Mono"
+  - file: "gfonts://Roboto"
     id: font_small
-    size: 12
-  - file: "gfonts://Roboto Mono"
+    size: 11
+    glyphs: "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+  - file: "gfonts://Roboto"
     id: font_medium
-    size: 16
+    size: 14
+    glyphs: "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 
 # -----------------------------------------------------------------------------
 #  XPT2046 resistive touch
@@ -246,28 +249,28 @@ text_sensor:
   - platform: template
     id: last_message
     name: "Last Received Message"
-    update_interval: 1s
+    update_interval: 5s
     lambda: |-
       return espnow_last_body;
 
   - platform: template
     id: last_sender
     name: "Last Sender"
-    update_interval: 1s
+    update_interval: 5s
     lambda: |-
       return espnow_last_sender;
 
   - platform: template
     id: sent_message
     name: "Last Sent Message"
-    update_interval: 1s
+    update_interval: 5s
     lambda: |-
       return espnow_last_sent;
 
   - platform: template
     id: notify_active
     name: "Notification Active"
-    update_interval: 500ms
+    update_interval: 2s
     lambda: |-
       return std::string(espnow_notify_visible ? "true" : "false");
 
