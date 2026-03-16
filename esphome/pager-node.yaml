@@ -27,6 +27,9 @@ esphome:
   comment: "ESP32 CYD mesh pager node"
   includes:
     - espnow_bridge.h             # custom ESP-NOW glue
+  platformio_options:
+    build_flags:
+      - "-D PAGER_DEVICE_NAME='\"${device_name}\"'"
   on_boot:
     priority: 600
     then:
@@ -41,8 +44,6 @@ esp32:
   board: esp32dev
   framework:
     type: arduino
-  extra_build_flags:
-    - "-D PAGER_DEVICE_NAME='\"${device_name}\"'"
 
 # -----------------------------------------------------------------------------
 #  Logging
