@@ -6,9 +6,9 @@
 #include "message_types.h"
 
 enum ScreenID {
-  SCREEN_INBOX   = 0,
-  SCREEN_COMPOSE = 1,
-  SCREEN_PEERS   = 2,
+  SCREEN_MESH    = 0,   // THE MESH — message history
+  SCREEN_COMPOSE = 1,   // keyboard + compose
+  SCREEN_PEERS   = 2,   // peer list + rename option
 };
 
 namespace UI {

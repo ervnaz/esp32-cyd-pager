@@ -1,26 +1,19 @@
 // =============================================================================
-//  esp32_pager.ino  —  ESP-NOW mesh pager for ESP32-2432S028R (CYD)
+//  esp32_pager.ino  —  Standalone ESP-NOW mesh pager
+//  Board: ESP32-2432S028R ("Cheap Yellow Display")
 //
-//  Features:
-//    - Message history (last 5 received, with relative timestamps)
-//    - On-screen keyboard with SHIFT toggle (upper/lower case)
-//    - Unread badge with auto-clear on INBOX open
-//    - Auto peer discovery via heartbeat beacons
-//    - Dynamic WiFi channel matching (compatible with ESPHome units)
-//    - Notification banner on incoming messages
-//    - Three screens: INBOX | COMPOSE | PEERS
+//  NO WiFi router required. NO internet. NO OTA. NO Home Assistant.
+//  Devices find each other automatically and communicate directly.
+//
+//  Device name is auto-generated from MAC address on first boot (e.g. ND-A3F2C1)
+//  and can be changed from the PEERS screen on-device.
 //
 //  Libraries required:
-//    - TFT_eSPI by Bodmer          (copy User_Setup.h to library folder)
+//    - TFT_eSPI by Bodmer         (copy User_Setup.h to library folder)
 //    - XPT2046_Touchscreen by Paul Stoffregen
-//
-//  Per-unit config: edit DEVICE_NAME in config.h before flashing
 // =============================================================================
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <esp_now.h>
-#include <esp_wifi.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Touchscreen.h>
@@ -30,16 +23,15 @@
 #include "espnow_manager.h"
 #include "message_store.h"
 
-TFT_eSPI             tft = TFT_eSPI();
-XPT2046_Touchscreen  ts(TOUCH_CS, TOUCH_IRQ);
+TFT_eSPI            tft = TFT_eSPI();
+XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
 
-// Forward declaration
-void onMessageReceived(const PagerMessage& msg);
+void onMessage(const PagerMessage& msg);
 
 // =============================================================================
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n[PAGER] Booting...");
+  Serial.println("\n[PAGER] Booting — standalone mesh mode");
 
   // Display
   tft.init();
@@ -53,26 +45,22 @@ void setup() {
   ts.begin();
   ts.setRotation(TOUCH_ROTATION);
 
-  // WiFi in STA mode (needed for ESP-NOW, no router required)
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
+  // Load persisted messages before UI starts
+  MessageStore::load();
 
-  Serial.print("[PAGER] MAC: ");
-  Serial.println(WiFi.macAddress());
-
-  // ESP-NOW
-  ESPNowManager::begin(onMessageReceived);
+  // ESP-NOW (WiFi radio only — no router, no connect)
+  ESPNowManager::begin(onMessage);
 
   // UI
   UI::begin(tft);
-  UI::showScreen(SCREEN_INBOX);
+  UI::showScreen(SCREEN_MESH);
 
   Serial.println("[PAGER] Ready.");
 }
 
 // =============================================================================
 void loop() {
-  // Touch handling
+  // Touch
   if (ts.tirqTouched() && ts.touched()) {
     TS_Point raw = ts.getPoint();
     TouchPoint tp = mapTouch(raw.x, raw.y);
@@ -81,15 +69,15 @@ void loop() {
     UI::handleTouch(0, 0, false);
   }
 
-  // Periodic tasks (status bar refresh, notification dismiss, heartbeat)
-  UI::update();
+  // Heartbeat + peer expiry
   ESPNowManager::update();
+
+  // Status bar refresh + notification dismiss
+  UI::update();
 }
 
 // =============================================================================
-//  ESP-NOW receive callback — called from WiFi task, posts to MessageStore
-// =============================================================================
-void onMessageReceived(const PagerMessage& msg) {
+void onMessage(const PagerMessage& msg) {
   MessageStore::add(msg);
   UI::notifyNewMessage(msg);
 }
