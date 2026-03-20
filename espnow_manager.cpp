@@ -1,6 +1,8 @@
 // =============================================================================
 //  espnow_manager.cpp  —  Standalone ESP-NOW mesh implementation
 // =============================================================================
+#include "config.h"
+#include "message_types.h"
 #include "espnow_manager.h"
 #include <esp_now.h>
 #include <esp_wifi.h>
