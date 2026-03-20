@@ -19,8 +19,9 @@ namespace MessageStore {
     _prefs.begin("pgr_inbox", false);
     int saved = 0;
     for (int di = 0; di < _count && saved < MSG_HISTORY; di++) {
-      const PagerMessage* m = get(di);
-      if (!m) continue;
+      int ring = (_head - 1 - di + MAX_MESSAGES * 2) % MAX_MESSAGES;
+      const PagerMessage* m = &_msgs[ring];
+      if (m->body[0] == '\0') continue;
       char kb[10], kf[10], km[10];
       snprintf(kb, sizeof(kb), "body%d", saved);
       snprintf(kf, sizeof(kf), "from%d", saved);
